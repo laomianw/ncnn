@@ -32,7 +32,6 @@ namespace ncnn {
 #if NCNN_BF16
 #include "convolution_packed_bf16s.h"
 #include "convolution_3x3_winograd_bf16s.h"
-#include "convolution_im2col_gemm_bf16s_fp16s.h"
 #include "convolution_im2col_gemm_bf16s.h"
 #endif // NCNN_BF16
 
@@ -1372,7 +1371,7 @@ int Convolution_arm::forward_int8_arm(const Mat& bottom_blob, Mat& top_blob, con
         else
         {
 #if NCNN_ARM82
-            if (ncnn::cpu_support_arm_asimdhp() && opt.use_fp16_arithmetic)
+            if (ncnn::cpu_support_arm_asimdhp() && opt.use_fp16_storage && opt.use_fp16_arithmetic)
             {
                 out_elempack_int32 = num_output % 8 == 0 ? 8 : num_output % 4 == 0 ? 4 : 1;
             }
