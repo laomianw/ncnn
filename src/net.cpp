@@ -652,7 +652,7 @@ int NetPrivate::do_forward_layer(const Layer* layer, std::vector<Mat>& blob_mats
             return ret;
 
         // forward
-        if (opt.lightmode && layer->support_inplace)
+        if (opt.lightmode && layer->support_inplace && layer->use_inplace)
         {
             Mat& bottom_top_blob = bottom_blob;
             int ret = layer->forward_inplace(bottom_top_blob, opt);
@@ -710,7 +710,7 @@ int NetPrivate::do_forward_layer(const Layer* layer, std::vector<Mat>& blob_mats
         }
 
         // forward
-        if (opt.lightmode && layer->support_inplace)
+        if (opt.lightmode && layer->support_inplace && layer->use_inplace)
         {
             std::vector<Mat>& bottom_top_blobs = bottom_blobs;
             int ret = layer->forward_inplace(bottom_top_blobs, opt);
@@ -787,7 +787,7 @@ int NetPrivate::do_forward_layer(const Layer* layer, std::vector<VkMat>& blob_ma
             return ret;
 
         // forward
-        if (opt.lightmode && layer->support_inplace)
+        if (opt.lightmode && layer->support_inplace && layer->use_inplace)
         {
             VkMat& bottom_top_blob = bottom_blob;
             int ret = layer->forward_inplace(bottom_top_blob, cmd, opt);
@@ -845,7 +845,7 @@ int NetPrivate::do_forward_layer(const Layer* layer, std::vector<VkMat>& blob_ma
         }
 
         // forward
-        if (opt.lightmode && layer->support_inplace)
+        if (opt.lightmode && layer->support_inplace && layer->use_inplace)
         {
             std::vector<VkMat>& bottom_top_blobs = bottom_blobs;
             int ret = layer->forward_inplace(bottom_top_blobs, cmd, opt);

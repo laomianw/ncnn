@@ -17,6 +17,7 @@ Layer::Layer()
     support_inplace = false;
     support_vulkan = false;
     support_packing = false;
+    use_inplace = true;
 
     support_bf16_storage = false;
     support_fp16_storage = false;

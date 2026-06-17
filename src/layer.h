@@ -54,6 +54,9 @@ public:
     // accept input blob with packed storage
     bool support_packing;
 
+    // whether to use inplace operation by default when support_inplace is true
+    bool use_inplace;
+
     // accept bf16
     bool support_bf16_storage;
 
