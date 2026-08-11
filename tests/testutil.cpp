@@ -249,29 +249,36 @@ int Compare(const ncnn::Mat& a, const ncnn::Mat& b, float epsilon)
     CHECK_MEMBER(h)
     CHECK_MEMBER(d)
     CHECK_MEMBER(c)
+    CHECK_MEMBER(n)
     CHECK_MEMBER(elemsize)
     CHECK_MEMBER(elempack)
 
 #undef CHECK_MEMBER
 
-    for (int q = 0; q < a.c; q++)
+    for (int n = 0; n < a.n; n++)
     {
-        const ncnn::Mat ma = a.channel(q);
-        const ncnn::Mat mb = b.channel(q);
-        for (int z = 0; z < a.d; z++)
+        const ncnn::Mat ba = a.batch(n);
+        const ncnn::Mat bb = b.batch(n);
+
+        for (int q = 0; q < a.c; q++)
         {
-            const ncnn::Mat da = ma.depth(z);
-            const ncnn::Mat db = mb.depth(z);
-            for (int i = 0; i < a.h; i++)
+            const ncnn::Mat ma = ba.channel(q);
+            const ncnn::Mat mb = bb.channel(q);
+            for (int z = 0; z < a.d; z++)
             {
-                const float* pa = da.row(i);
-                const float* pb = db.row(i);
-                for (int j = 0; j < a.w; j++)
+                const ncnn::Mat da = ma.depth(z);
+                const ncnn::Mat db = mb.depth(z);
+                for (int i = 0; i < a.h; i++)
                 {
-                    if (!NearlyEqual(pa[j], pb[j], epsilon))
+                    const float* pa = da.row(i);
+                    const float* pb = db.row(i);
+                    for (int j = 0; j < a.w; j++)
                     {
-                        fprintf(stderr, "value not match  at c:%d d:%d h:%d w:%d    expect %f but got %f\n", q, z, i, j, pa[j], pb[j]);
-                        return -1;
+                        if (!NearlyEqual(pa[j], pb[j], epsilon))
+                        {
+                            fprintf(stderr, "value not match  at n:%d c:%d d:%d h:%d w:%d    expect %f but got %f\n", n, q, z, i, j, pa[j], pb[j]);
+                            return -1;
+                        }
                     }
                 }
             }
@@ -919,6 +926,15 @@ int test_layer_gpu(int typeindex, const ncnn::ParamDict& pd, const std::vector<n
     // FIXME fp16a may produce large error
     opt.use_fp16_arithmetic = false;
 
+    // skip test for missed gpu capability
+    if ((_opt.use_fp16_storage && !opt.use_fp16_storage)
+            || (_opt.use_fp16_arithmetic && !opt.use_fp16_arithmetic)
+            || (_opt.use_bf16_storage && !opt.use_bf16_storage))
+    {
+        delete op;
+        return 233;
+    }
+
     if (opt.use_bf16_packed || opt.use_bf16_storage)
     {
         // winograd produce large error
@@ -1495,6 +1511,15 @@ int test_layer_gpu(int typeindex, const ncnn::ParamDict& pd, const std::vector<n
     // FIXME fp16a may produce large error
     opt.use_fp16_arithmetic = false;
 
+    // skip test for missed gpu capability
+    if ((_opt.use_fp16_storage && !opt.use_fp16_storage)
+            || (_opt.use_fp16_arithmetic && !opt.use_fp16_arithmetic)
+            || (_opt.use_bf16_storage && !opt.use_bf16_storage))
+    {
+        delete op;
+        return 233;
+    }
+
     if (opt.use_bf16_packed || opt.use_bf16_storage)
     {
         // winograd produce large error
@@ -2005,20 +2030,21 @@ int test_layer_opt(const char* layer_type, const ncnn::ParamDict& pd, const std:
 
 int test_layer(const char* layer_type, const ncnn::ParamDict& pd, const std::vector<ncnn::Mat>& weights, const std::vector<ncnn::Mat>& a, int top_blob_count, float epsilon, int flag)
 {
-    // pack fp16p fp16s fp16a bf16p/bf16s flag
-    const int options[][6] = {
-        {0, 0, 0, 0, 0, 0},
-        {0, 0, 1, 0, 0, 0},
-        {0, 0, 1, 1, 0, 0},
-        {0, 0, 0, 0, 1, 0},
-        {1, 0, 0, 0, 0, 0},
+    // pack fp16p fp16s fp16a bf16p bf16s flag
+    const int options[][7] = {
+        {0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 1, 0, 0, 0, 0},
+        {0, 0, 1, 1, 0, 0, 0},
+        {0, 0, 0, 0, 0, 1, 0},
+        {1, 0, 0, 0, 0, 0, 0},
 #if NCNN_VULKAN
-        {1, 1, 0, 0, 0, TEST_LAYER_DISABLE_CPU_TESTING},
-        {1, 1, 0, 1, 0, TEST_LAYER_DISABLE_CPU_TESTING},
+        {1, 1, 0, 0, 0, 0, TEST_LAYER_DISABLE_CPU_TESTING},
+        {1, 1, 0, 1, 0, 0, TEST_LAYER_DISABLE_CPU_TESTING},
+        {1, 0, 0, 0, 1, 0, TEST_LAYER_DISABLE_CPU_TESTING},
 #endif // NCNN_VULKAN
-        {1, 0, 1, 0, 0, 0},
-        {1, 0, 1, 1, 0, 0},
-        {1, 0, 0, 0, 1, 0},
+        {1, 0, 1, 0, 0, 0, 0},
+        {1, 0, 1, 1, 0, 0, 0},
+        {1, 0, 0, 0, 0, 1, 0},
     };
 
     const int opt_count = sizeof(options) / sizeof(options[0]);
@@ -2032,9 +2058,9 @@ int test_layer(const char* layer_type, const ncnn::ParamDict& pd, const std::vec
         opt.use_fp16_storage = options[i][2];
         opt.use_fp16_arithmetic = options[i][3];
         opt.use_bf16_packed = options[i][4];
-        opt.use_bf16_storage = options[i][4];
+        opt.use_bf16_storage = options[i][5];
 
-        int ret = test_layer_opt(layer_type, pd, weights, opt, a, top_blob_count, epsilon, flag | options[i][5]);
+        int ret = test_layer_opt(layer_type, pd, weights, opt, a, top_blob_count, epsilon, flag | options[i][6]);
         if (ret != 0)
             return ret;
     }
@@ -2044,20 +2070,21 @@ int test_layer(const char* layer_type, const ncnn::ParamDict& pd, const std::vec
 
 int test_layer(const char* layer_type, const ncnn::ParamDict& pd, const std::vector<ncnn::Mat>& weights, const ncnn::Mat& a, float epsilon, int flag)
 {
-    // pack fp16p fp16s fp16a bf16p/bf16s flag
-    const int options[][6] = {
-        {0, 0, 0, 0, 0, 0},
-        {0, 0, 1, 0, 0, 0},
-        {0, 0, 1, 1, 0, 0},
-        {0, 0, 0, 0, 1, 0},
-        {1, 0, 0, 0, 0, 0},
+    // pack fp16p fp16s fp16a bf16p bf16s flag
+    const int options[][7] = {
+        {0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 1, 0, 0, 0, 0},
+        {0, 0, 1, 1, 0, 0, 0},
+        {0, 0, 0, 0, 0, 1, 0},
+        {1, 0, 0, 0, 0, 0, 0},
 #if NCNN_VULKAN
-        {1, 1, 0, 0, 0, TEST_LAYER_DISABLE_CPU_TESTING},
-        {1, 1, 0, 1, 0, TEST_LAYER_DISABLE_CPU_TESTING},
+        {1, 1, 0, 0, 0, 0, TEST_LAYER_DISABLE_CPU_TESTING},
+        {1, 1, 0, 1, 0, 0, TEST_LAYER_DISABLE_CPU_TESTING},
+        {1, 0, 0, 0, 1, 0, TEST_LAYER_DISABLE_CPU_TESTING},
 #endif // NCNN_VULKAN
-        {1, 0, 1, 0, 0, 0},
-        {1, 0, 1, 1, 0, 0},
-        {1, 0, 0, 0, 1, 0},
+        {1, 0, 1, 0, 0, 0, 0},
+        {1, 0, 1, 1, 0, 0, 0},
+        {1, 0, 0, 0, 0, 1, 0},
     };
 
     const int opt_count = sizeof(options) / sizeof(options[0]);
@@ -2071,9 +2098,9 @@ int test_layer(const char* layer_type, const ncnn::ParamDict& pd, const std::vec
         opt.use_fp16_storage = options[i][2];
         opt.use_fp16_arithmetic = options[i][3];
         opt.use_bf16_packed = options[i][4];
-        opt.use_bf16_storage = options[i][4];
+        opt.use_bf16_storage = options[i][5];
 
-        int ret = test_layer_opt(layer_type, pd, weights, opt, a, epsilon, flag | options[i][5]);
+        int ret = test_layer_opt(layer_type, pd, weights, opt, a, epsilon, flag | options[i][6]);
         if (ret != 0)
             return ret;
     }
@@ -2456,7 +2483,7 @@ int test_layer_oom_opt(const char* layer_type, const ncnn::ParamDict& pd, const 
 
 int test_layer_oom(const char* layer_type, const ncnn::ParamDict& pd, const std::vector<ncnn::Mat>& weights, const std::vector<ncnn::Mat>& a, int top_blob_count, int flag)
 {
-    // pack fp16p fp16s fp16a bf16s
+    // pack fp16p fp16s fp16a bf16p/bf16s
     const int options[][5] = {
         {0, 0, 0, 0, 0},
         {0, 0, 1, 0, 0},
@@ -2491,7 +2518,7 @@ int test_layer_oom(const char* layer_type, const ncnn::ParamDict& pd, const std:
 
 int test_layer_oom(const char* layer_type, const ncnn::ParamDict& pd, const std::vector<ncnn::Mat>& weights, const ncnn::Mat& a, int flag)
 {
-    // pack fp16p fp16s fp16a bf16s
+    // pack fp16p fp16s fp16a bf16p/bf16s
     const int options[][5] = {
         {0, 0, 0, 0, 0},
         {0, 0, 1, 0, 0},
